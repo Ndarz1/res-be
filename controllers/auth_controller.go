@@ -17,40 +17,70 @@ func checkPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
+func responseError(w http.ResponseWriter, code int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(
+		models.Response{
+			Status:  code,
+			Message: message,
+		},
+	)
+}
+
 func Login(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
+	if r.Method != "POST" {
+		responseError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 	
-	var input struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
+	var input models.LoginInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		responseError(w, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 	
 	var user models.User
 	var passwordHash string
 	
-	query := "SELECT id, username, role, password_hash FROM users WHERE username = $1 AND deleted_at IS NULL"
-	err := config.DB.QueryRow(query, input.Username).Scan(&user.ID, &user.Username, &user.Role, &passwordHash)
+	query := `
+		SELECT id, uuid, username, email, full_name, phone, role, is_active, password_hash
+		FROM users
+		WHERE (username = $1 OR email = $1)
+		AND deleted_at IS NULL
+	`
+	
+	err := config.DB.QueryRow(query, input.Username).Scan(
+		&user.ID,
+		&user.UUID,
+		&user.Username,
+		&user.Email,
+		&user.FullName,
+		&user.Phone,
+		&user.Role,
+		&user.IsActive,
+		&passwordHash,
+	)
 	
 	if err == sql.ErrNoRows {
-		http.Error(w, "Username tidak ditemukan", http.StatusUnauthorized)
+		responseError(w, http.StatusUnauthorized, "Username atau Email tidak ditemukan")
 		return
 	} else if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		responseError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	
+	if !user.IsActive {
+		responseError(w, http.StatusForbidden, "Akun anda dinonaktifkan")
 		return
 	}
 	
 	if !checkPasswordHash(input.Password, passwordHash) {
-		http.Error(w, "Password salah", http.StatusUnauthorized)
+		responseError(w, http.StatusUnauthorized, "Password salah")
 		return
 	}
+	
+	_, _ = config.DB.Exec("UPDATE users SET last_login = NOW() WHERE id = $1", user.ID)
 	
 	http.SetCookie(
 		w, &http.Cookie{
@@ -61,6 +91,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		},
 	)
 	
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(
 		models.Response{
 			Status:  200,
@@ -71,7 +102,6 @@ func Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
 	http.SetCookie(
 		w, &http.Cookie{
 			Name:    "session_token",
@@ -80,10 +110,57 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 			Path:    "/",
 		},
 	)
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(
 		models.Response{
 			Status:  200,
 			Message: "Logout Berhasil",
+		},
+	)
+}
+
+func Register(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		responseError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+	
+	var input models.RegisterInput
+	
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		responseError(w, http.StatusBadRequest, "Invalid JSON data")
+		return
+	}
+	
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	if err != nil {
+		responseError(w, http.StatusInternalServerError, "Gagal enkripsi password")
+		return
+	}
+	
+	var phone *string
+	if input.Phone != "" {
+		phone = &input.Phone
+	}
+	
+	query := `
+		INSERT INTO users (username, email, password_hash, full_name, phone, role, is_active)
+		VALUES ($1, $2, $3, $4, $5, 'user', TRUE)
+	`
+	
+	_, err = config.DB.Exec(query, input.Username, input.Email, string(hashedPassword), input.FullName, phone)
+	
+	if err != nil {
+		responseError(w, http.StatusConflict, "Username atau Email sudah terdaftar")
+		return
+	}
+	
+	w.WriteHeader(http.StatusCreated)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(
+		models.Response{
+			Status:  201,
+			Message: "Registrasi Berhasil",
 		},
 	)
 }
