@@ -41,10 +41,10 @@ func CreateBooking(w http.ResponseWriter, r *http.Request) {
 	finalPrice := hargaTiket * float64(input.Quantity)
 	
 	query := `
-   INSERT INTO bookings (wisata_id, user_id, visit_date, quantity, total_price, final_price, status, payment_method, created_at)
-   VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, NOW())
-   RETURNING id, booking_code
-  `
+		INSERT INTO bookings (wisata_id, user_id, visit_date, quantity, total_price, final_price, status, payment_method, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, NOW())
+		RETURNING id, booking_code
+	`
 	
 	var newBookingID int
 	var newBookingCode string
@@ -94,15 +94,16 @@ func GetBookingHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	query := `
-   SELECT
-    b.id, b.booking_code, b.wisata_id, w.nama_tempat,
-    b.user_id, b.visit_date, b.quantity,
-    b.total_price, b.final_price, b.status, b.payment_method, b.created_at
-   FROM bookings b
-   JOIN wisata w ON b.wisata_id = w.id
-   WHERE b.user_id = $1
-   ORDER BY b.created_at DESC
-  `
+		SELECT
+			b.id, b.booking_code, b.wisata_id, w.nama_tempat,
+			b.visit_date, b.quantity, b.total_price, b.final_price,
+			b.status, b.created_at,
+			COALESCE((SELECT image_url FROM wisata_images WHERE wisata_id = w.id LIMIT 1), '') as wisata_image
+		FROM bookings b
+		JOIN wisata w ON b.wisata_id = w.id
+		WHERE b.user_id = $1
+		ORDER BY b.created_at DESC
+	`
 	
 	rows, err := config.DB.Query(query, userID)
 	if err != nil {
@@ -112,23 +113,50 @@ func GetBookingHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	
-	var history []models.Booking
+	var history []map[string]interface{}
+	
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	baseURL := scheme + "://" + r.Host
+	
 	for rows.Next() {
 		var b models.Booking
-		var visitDate time.Time
+		var visitDateRaw time.Time
+		var createdAtRaw time.Time
+		var imagePath string
 		
 		err := rows.Scan(
 			&b.ID, &b.BookingCode, &b.WisataID, &b.WisataNama,
-			&b.UserID, &visitDate, &b.Quantity,
-			&b.TotalPrice, &b.FinalPrice, &b.Status, &b.PaymentMethod, &b.CreatedAt,
+			&visitDateRaw, &b.Quantity, &b.TotalPrice, &b.FinalPrice,
+			&b.Status, &createdAtRaw, &imagePath,
 		)
+		
 		if err != nil {
 			log.Println("SCAN ERROR:", err)
 			continue
 		}
 		
-		b.VisitDate = visitDate.Format("2006-01-02")
-		history = append(history, b)
+		bookingItem := map[string]interface{}{
+			"id":           b.ID,
+			"booking_code": b.BookingCode,
+			"wisata_id":    b.WisataID,
+			"wisata_nama":  b.WisataNama,
+			"visit_date":   visitDateRaw.Format("2006-01-02"),
+			"quantity":     b.Quantity,
+			"total_price":  b.TotalPrice,
+			"final_price":  b.FinalPrice,
+			"status":       b.Status,
+			"created_at":   createdAtRaw,
+			"wisata_image": "",
+		}
+		
+		if imagePath != "" {
+			bookingItem["wisata_image"] = baseURL + imagePath
+		}
+		
+		history = append(history, bookingItem)
 	}
 	
 	w.Header().Set("Content-Type", "application/json")
@@ -142,12 +170,12 @@ func GetBookingHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetBookingDetail(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
+	
 	code := r.URL.Query().Get("code")
 	
 	query := `
 		SELECT b.id, b.booking_code, b.wisata_id, w.nama_tempat,
-		       b.visit_date, b.quantity, b.final_price, b.status
+				b.visit_date, b.quantity, b.final_price, b.status
 		FROM bookings b
 		JOIN wisata w ON b.wisata_id = w.id
 		WHERE b.booking_code = $1
@@ -179,11 +207,6 @@ func GetBookingDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func ProcessPayment(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
 	
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -222,11 +245,6 @@ func ProcessPayment(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllBookings(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
 	
 	query := `
 		SELECT
@@ -295,11 +313,6 @@ func GetAllBookings(w http.ResponseWriter, r *http.Request) {
 }
 
 func CancelBooking(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
 	
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

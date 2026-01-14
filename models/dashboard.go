@@ -11,13 +11,15 @@ type DashboardStats struct {
 }
 
 type PopularWisata struct {
-	ID          int     `json:"id"`
-	NamaTempat  string  `json:"nama_tempat"`
-	Deskripsi   string  `json:"deskripsi"`
-	Lokasi      string  `json:"lokasi"`
-	HargaTiket  float64 `json:"harga_tiket"`
-	ImageURL    string  `json:"image_url"`
-	TotalVisits int     `json:"total_visits"`
-	Label       string  `json:"label"`
-	Percentage  float64 `json:"percentage"`
+	ID           int     `json:"id"`
+	NamaTempat   string  `json:"nama_tempat"`
+	Deskripsi    string  `json:"deskripsi"`
+	Lokasi       string  `json:"lokasi"`
+	RatingTotal  float64 `json:"rating_total"`
+	TotalReviews int     `json:"total_reviews"`
+	HargaTiket   float64 `json:"harga_tiket"`
+	ImageURL     string  `json:"image_url"`
+	TotalVisits  int     `json:"total_visits"`
+	Label        string  `json:"label"`
+	Percentage   float64 `json:"percentage"`
 }

@@ -11,14 +11,12 @@ import (
 )
 
 func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	
 	query := `
-   SELECT
-    total_wisata, active_wisata, total_users, total_visitors,
-    total_revenue, total_bookings, average_rating
-   FROM vw_dashboard_stats
-  `
+		SELECT
+			total_wisata, active_wisata, total_users, total_visitors,
+			total_revenue, total_bookings, average_rating
+		FROM vw_dashboard_stats
+	`
 	
 	var stats models.DashboardStats
 	
@@ -49,18 +47,16 @@ func GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetRecentBookings(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	
 	query := `
-   SELECT
-    b.id, b.booking_code, b.wisata_id, w.nama_tempat,
-    b.user_id, b.visit_date, b.quantity,
-    b.total_price, b.final_price, b.status, b.payment_method, b.created_at
-   FROM bookings b
-   JOIN wisata w ON b.wisata_id = w.id
-   ORDER BY b.created_at DESC
-   LIMIT 5
-  `
+		SELECT
+			b.id, b.booking_code, b.wisata_id, w.nama_tempat,
+			b.user_id, b.visit_date, b.quantity,
+			b.total_price, b.final_price, b.status, b.payment_method, b.created_at
+		FROM bookings b
+		JOIN wisata w ON b.wisata_id = w.id
+		ORDER BY b.created_at DESC
+		LIMIT 5
+	`
 	
 	rows, err := config.DB.Query(query)
 	if err != nil {
@@ -104,8 +100,6 @@ func GetRecentBookings(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetPopularWisata(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	
 	var totalAllBookings int
 	err := config.DB.QueryRow("SELECT COUNT(*) FROM bookings").Scan(&totalAllBookings)
 	if err != nil {
@@ -116,17 +110,24 @@ func GetPopularWisata(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	query := `
-   SELECT
-    w.id, w.nama_tempat, COALESCE(w.deskripsi, ''), w.lokasi, w.harga_tiket,
-    COALESCE((SELECT image_url FROM wisata_images WHERE wisata_id = w.id AND is_primary = true LIMIT 1), '') as image_url,
-    COUNT(b.id) as total_visits
-   FROM wisata w
-   LEFT JOIN bookings b ON w.id = b.wisata_id
-   WHERE w.deleted_at IS NULL
-   GROUP BY w.id, w.nama_tempat, w.deskripsi, w.lokasi, w.harga_tiket
-   ORDER BY total_visits DESC
-   LIMIT 5
-  `
+		SELECT
+			w.id,
+			w.nama_tempat,
+			COALESCE(w.deskripsi, ''),
+			w.lokasi,
+			w.harga_tiket,
+			COALESCE((SELECT image_url FROM wisata_images WHERE wisata_id = w.id AND is_primary = true LIMIT 1), '') as image_url,
+			COUNT(DISTINCT b.id) as total_visits,
+			COALESCE(AVG(r.rating), 0) as rating_total,
+			COUNT(DISTINCT r.id) as total_reviews
+		FROM wisata w
+		LEFT JOIN bookings b ON w.id = b.wisata_id
+		LEFT JOIN reviews r ON w.id = r.wisata_id
+		WHERE w.deleted_at IS NULL
+		GROUP BY w.id, w.nama_tempat, w.deskripsi, w.lokasi, w.harga_tiket
+		ORDER BY total_visits DESC
+		LIMIT 5
+	`
 	
 	rows, err := config.DB.Query(query)
 	if err != nil {
@@ -149,9 +150,10 @@ func GetPopularWisata(w http.ResponseWriter, r *http.Request) {
 		
 		err := rows.Scan(
 			&p.ID, &p.NamaTempat, &p.Deskripsi, &p.Lokasi, &p.HargaTiket,
-			&imgURL, &p.TotalVisits,
+			&imgURL, &p.TotalVisits, &p.RatingTotal, &p.TotalReviews,
 		)
 		if err != nil {
+			log.Println("SCAN ERROR POPULAR:", err)
 			continue
 		}
 		

@@ -37,26 +37,22 @@ func saveUploadedFile(file io.Reader, filename string) (string, error) {
 }
 
 func GetAllWisata(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	// HAPUS enableCors dan OPTIONS check
 	
 	w.Header().Set("Content-Type", "application/json")
 	
 	searchQuery := r.URL.Query().Get("q")
 	
 	query := `
-   SELECT
-    w.id, w.uuid, w.nama_tempat, w.slug, w.lokasi,
-    w.harga_tiket, w.rating_total, w.category_id,
-    COALESCE((SELECT image_url FROM wisata_images WHERE wisata_id = w.id AND is_primary = true LIMIT 1), '') as image_url,
-    c.name as category_name
-   FROM wisata w
-   JOIN categories c ON w.category_id = c.id
-   WHERE w.deleted_at IS NULL
-  `
+		SELECT
+			w.id, w.uuid, w.nama_tempat, w.slug, w.lokasi,
+			w.harga_tiket, w.rating_total, w.category_id,
+			COALESCE((SELECT image_url FROM wisata_images WHERE wisata_id = w.id AND is_primary = true LIMIT 1), '') as image_url,
+			c.name as category_name
+		FROM wisata w
+		JOIN categories c ON w.category_id = c.id
+		WHERE w.deleted_at IS NULL
+	`
 	
 	var args []interface{}
 	if searchQuery != "" {
@@ -107,10 +103,7 @@ func GetAllWisata(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetWisataDetail(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	if r.Method == "OPTIONS" {
-		return
-	}
+	// HAPUS enableCors dan OPTIONS check
 	
 	id := r.URL.Query().Get("id")
 	if id == "" {
@@ -119,15 +112,15 @@ func GetWisataDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	query := `
-   SELECT
-    w.id, w.uuid, w.nama_tempat, w.deskripsi, w.fasilitas,
-    w.harga_tiket, w.lokasi, w.category_id,
-    c.name as category_name,
-    COALESCE((SELECT image_url FROM wisata_images WHERE wisata_id = w.id AND is_primary = true LIMIT 1), '') as image_url
-   FROM wisata w
-   JOIN categories c ON w.category_id = c.id
-   WHERE w.id = $1 AND w.deleted_at IS NULL
-  `
+		SELECT
+			w.id, w.uuid, w.nama_tempat, w.deskripsi, w.fasilitas,
+			w.harga_tiket, w.lokasi, w.category_id,
+			c.name as category_name,
+			COALESCE((SELECT image_url FROM wisata_images WHERE wisata_id = w.id AND is_primary = true LIMIT 1), '') as image_url
+		FROM wisata w
+		JOIN categories c ON w.category_id = c.id
+		WHERE w.id = $1 AND w.deleted_at IS NULL
+	`
 	
 	var data models.Wisata
 	err := config.DB.QueryRow(query, id).Scan(
@@ -159,11 +152,7 @@ func GetWisataDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateWisata(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	// HAPUS enableCors dan OPTIONS check
 	
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -185,10 +174,10 @@ func CreateWisata(w http.ResponseWriter, r *http.Request) {
 	fasilitas := r.FormValue("fasilitas")
 	
 	query := `
-   INSERT INTO wisata (nama_tempat, slug, category_id, lokasi, harga_tiket, deskripsi, fasilitas)
-   VALUES ($1, $2, $3, $4, $5, $6, $7)
-   RETURNING id
-  `
+		INSERT INTO wisata (nama_tempat, slug, category_id, lokasi, harga_tiket, deskripsi, fasilitas)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id
+	`
 	
 	var newID int
 	err = config.DB.QueryRow(
@@ -224,11 +213,7 @@ func CreateWisata(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateWisata(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	// HAPUS enableCors dan OPTIONS check
 	
 	if r.Method != "PUT" && r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -255,10 +240,10 @@ func UpdateWisata(w http.ResponseWriter, r *http.Request) {
 	fasilitas := r.FormValue("fasilitas")
 	
 	query := `
-   UPDATE wisata
-   SET nama_tempat=$1, category_id=$2, lokasi=$3, harga_tiket=$4, deskripsi=$5, fasilitas=$6, updated_at=NOW()
-   WHERE id=$7
-  `
+		UPDATE wisata
+		SET nama_tempat=$1, category_id=$2, lokasi=$3, harga_tiket=$4, deskripsi=$5, fasilitas=$6, updated_at=NOW()
+		WHERE id=$7
+	`
 	_, err = config.DB.Exec(
 		query,
 		namaTempat, categoryID, lokasi, hargaTiket, deskripsi, fasilitas, id,
@@ -292,9 +277,10 @@ func UpdateWisata(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteWisata(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
+	// HAPUS enableCors dan OPTIONS check
+	
+	if r.Method != "DELETE" && r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	

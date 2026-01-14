@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"time"
 	
 	"backend-wisata/config"
 	"backend-wisata/models"
@@ -51,15 +50,8 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	`
 	
 	err := config.DB.QueryRow(query, input.Username).Scan(
-		&user.ID,
-		&user.UUID,
-		&user.Username,
-		&user.Email,
-		&user.FullName,
-		&user.Phone,
-		&user.Role,
-		&user.IsActive,
-		&passwordHash,
+		&user.ID, &user.UUID, &user.Username, &user.Email,
+		&user.FullName, &user.Phone, &user.Role, &user.IsActive, &passwordHash,
 	)
 	
 	if err == sql.ErrNoRows {
@@ -82,39 +74,68 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	
 	_, _ = config.DB.Exec("UPDATE users SET last_login = NOW() WHERE id = $1", user.ID)
 	
-	http.SetCookie(
-		w, &http.Cookie{
-			Name:    "session_token",
-			Value:   user.Username,
-			Expires: time.Now().Add(24 * time.Hour),
-			Path:    "/",
-		},
-	)
+	session, _ := config.Store.Get(r, "eksplora-session")
+	session.Values["user_id"] = user.ID
+	session.Values["authenticated"] = true
+	session.Save(r, w)
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(
 		models.Response{
 			Status:  200,
 			Message: "Login Berhasil",
-			Data:    user,
 		},
 	)
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(
-		w, &http.Cookie{
-			Name:    "session_token",
-			Value:   "",
-			Expires: time.Now().Add(-1 * time.Hour),
-			Path:    "/",
-		},
-	)
+	session, _ := config.Store.Get(r, "eksplora-session")
+	session.Values["authenticated"] = false
+	session.Options.MaxAge = -1
+	session.Save(r, w)
+	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(
 		models.Response{
 			Status:  200,
 			Message: "Logout Berhasil",
+		},
+	)
+}
+
+func GetMe(w http.ResponseWriter, r *http.Request) {
+	session, _ := config.Store.Get(r, "eksplora-session")
+	
+	if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
+		responseError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	
+	userID := session.Values["user_id"]
+	var user models.User
+	
+	query := `
+		SELECT id, uuid, username, email, full_name, phone, role, is_active,
+		COALESCE(profile_image, '') as profile_image
+		FROM users WHERE id = $1
+	`
+	
+	err := config.DB.QueryRow(query, userID).Scan(
+		&user.ID, &user.UUID, &user.Username, &user.Email,
+		&user.FullName, &user.Phone, &user.Role, &user.IsActive, &user.ProfileImage,
+	)
+	
+	if err != nil {
+		responseError(w, http.StatusNotFound, "User not found")
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(
+		models.Response{
+			Status:  200,
+			Message: "User Data Fetched",
+			Data:    user,
 		},
 	)
 }
@@ -126,7 +147,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	var input models.RegisterInput
-	
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		responseError(w, http.StatusBadRequest, "Invalid JSON data")
 		return
