@@ -50,10 +50,7 @@ Pastikan Anda telah menginstal:
 
    - Secara default, aplikasi akan mencoba terhubung ke database PostgreSQL dengan konfigurasi berikut (terdapat di `config/database.go`):
      - **User**: `postgres`
-     - **Password**: `hjesa` (⚠️ Sesuaikan dengan password database lokal Anda)
      - **Host**: `localhost:5432`
-     - **Nama Database**: `pwd-res`
-   - Pastikan Anda telah membuat database dengan nama `pwd-res`.
    - Jika konfigurasi database Anda berbeda, silakan edit file `config/database.go`.
 
 4. **Jalankan Aplikasi:**
