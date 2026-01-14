@@ -55,7 +55,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	)
 	
 	if err == sql.ErrNoRows {
-		responseError(w, http.StatusUnauthorized, "Username atau Email tidak ditemukan")
+		responseError(w, http.StatusUnauthorized, "Akun tidak ditemukan")
 		return
 	} else if err != nil {
 		responseError(w, http.StatusInternalServerError, err.Error())
@@ -63,7 +63,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	if !user.IsActive {
-		responseError(w, http.StatusForbidden, "Akun anda dinonaktifkan")
+		responseError(w, http.StatusForbidden, "Akun nonaktif")
 		return
 	}
 	
@@ -74,25 +74,38 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	
 	_, _ = config.DB.Exec("UPDATE users SET last_login = NOW() WHERE id = $1", user.ID)
 	
-	session, _ := config.Store.Get(r, "eksplora-session")
-	session.Values["user_id"] = user.ID
-	session.Values["authenticated"] = true
-	session.Save(r, w)
+	if user.Role == "admin" || user.Role == "superadmin" {
+		session, _ := config.AdminStore.Get(r, "admin-session-token")
+		session.Values["user_id"] = user.ID
+		session.Values["authenticated"] = true
+		session.Save(r, w)
+	} else {
+		session, _ := config.UserStore.Get(r, "user-session-token")
+		session.Values["user_id"] = user.ID
+		session.Values["authenticated"] = true
+		session.Save(r, w)
+	}
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(
 		models.Response{
 			Status:  200,
 			Message: "Login Berhasil",
+			Data:    user,
 		},
 	)
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
-	session, _ := config.Store.Get(r, "eksplora-session")
-	session.Values["authenticated"] = false
-	session.Options.MaxAge = -1
-	session.Save(r, w)
+	adminSession, _ := config.AdminStore.Get(r, "admin-session-token")
+	adminSession.Values["authenticated"] = false
+	adminSession.Options.MaxAge = -1
+	adminSession.Save(r, w)
+	
+	userSession, _ := config.UserStore.Get(r, "user-session-token")
+	userSession.Values["authenticated"] = false
+	userSession.Options.MaxAge = -1
+	userSession.Save(r, w)
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(
@@ -104,16 +117,27 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetMe(w http.ResponseWriter, r *http.Request) {
-	session, _ := config.Store.Get(r, "eksplora-session")
+	var userID interface{}
+	var authenticated bool
 	
-	if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
+	adminSession, _ := config.AdminStore.Get(r, "admin-session-token")
+	if auth, ok := adminSession.Values["authenticated"].(bool); ok && auth {
+		userID = adminSession.Values["user_id"]
+		authenticated = true
+	} else {
+		userSession, _ := config.UserStore.Get(r, "user-session-token")
+		if auth, ok := userSession.Values["authenticated"].(bool); ok && auth {
+			userID = userSession.Values["user_id"]
+			authenticated = true
+		}
+	}
+	
+	if !authenticated {
 		responseError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 	
-	userID := session.Values["user_id"]
 	var user models.User
-	
 	query := `
 		SELECT id, uuid, username, email, full_name, phone, role, is_active,
 		COALESCE(profile_image, '') as profile_image
@@ -134,7 +158,7 @@ func GetMe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(
 		models.Response{
 			Status:  200,
-			Message: "User Data Fetched",
+			Message: "Success",
 			Data:    user,
 		},
 	)

@@ -81,6 +81,13 @@ func main() {
 	mux.HandleFunc("/api/admin/reviews/delete", controllers.DeleteReview)
 	mux.HandleFunc("/api/bookings", controllers.GetAllBookings)
 	
+	mux.HandleFunc("/api/blog/posts", controllers.GetBlogPosts)
+	mux.HandleFunc("/api/blog/detail", controllers.GetBlogDetail)
+	mux.HandleFunc("/api/blog/categories", controllers.GetBlogCategories)
+	mux.HandleFunc("/api/blog/create", controllers.CreateBlogPost)
+	mux.HandleFunc("/api/blog/update", controllers.UpdateBlogPost)
+	mux.HandleFunc("/api/blog/delete", controllers.DeleteBlogPost)
+	
 	log.Println("Server running on http://localhost:8080")
 	
 	if err := http.ListenAndServe("0.0.0.0:8080", corsMiddleware(mux)); err != nil {

@@ -37,7 +37,6 @@ func saveUploadedFile(file io.Reader, filename string) (string, error) {
 }
 
 func GetAllWisata(w http.ResponseWriter, r *http.Request) {
-	// HAPUS enableCors dan OPTIONS check
 	
 	w.Header().Set("Content-Type", "application/json")
 	
@@ -103,7 +102,6 @@ func GetAllWisata(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetWisataDetail(w http.ResponseWriter, r *http.Request) {
-	// HAPUS enableCors dan OPTIONS check
 	
 	id := r.URL.Query().Get("id")
 	if id == "" {
@@ -152,7 +150,6 @@ func GetWisataDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateWisata(w http.ResponseWriter, r *http.Request) {
-	// HAPUS enableCors dan OPTIONS check
 	
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -213,7 +210,6 @@ func CreateWisata(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateWisata(w http.ResponseWriter, r *http.Request) {
-	// HAPUS enableCors dan OPTIONS check
 	
 	if r.Method != "PUT" && r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -277,7 +273,6 @@ func UpdateWisata(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteWisata(w http.ResponseWriter, r *http.Request) {
-	// HAPUS enableCors dan OPTIONS check
 	
 	if r.Method != "DELETE" && r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
